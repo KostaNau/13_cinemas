@@ -1,6 +1,6 @@
 # Cinemas
 
-## Decription
+## Description
 The script collect and console print information about movies are going in a cinemas at now (only Moscow, Russia) from [afisha.ru](https://www.afisha.ru/msk/schedule_cinema/) (about movies are going in a cinemas and number of cinemas for each movie) and from [kinopoisk.ru](https://www.kinopoisk.ru) (about movie rating and quantity of votes).
 
 
