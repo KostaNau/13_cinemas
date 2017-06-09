@@ -1,8 +1,8 @@
 import argparse
 import random
-from collections import defaultdict
+import json
 
-import utils
+
 import requests
 from bs4 import BeautifulSoup
 
@@ -12,17 +12,17 @@ KP_SEARCH_URL = "https://www.kinopoisk.ru/index.php"
 CAPTCHA_PAGE_LENGTH = 14000
 
 
-def parse_afisha(raw_page: bytes, quantity: int) -> defaultdict:
-    afisha_movies = defaultdict(list)
+def parse_afisha(raw_page: bytes) -> list:
+    afisha_movies = list()
     raw_soup = BeautifulSoup(raw_page, "html.parser")
     movies_pool = raw_soup.find_all(
                     "div", {
                             "class": "object s-votes-hover-area collapsed"
                             })
-    for movie in movies_pool[:quantity]:
+    for movie in movies_pool:
         title = movie.find("h3", {"class": "usetags"}).text
         cinemas = len(movie.find_all("td", {"class": "b-td-item"}))
-        afisha_movies[title].append(cinemas)
+        afisha_movies.append([title, cinemas])
     return afisha_movies
 
 
@@ -44,65 +44,75 @@ def parse_kinopoisk(raw_page: bytes) -> tuple:
     return movie_rating, votes_score
 
 
-def fetch_afisha_movies(raw_movies_page: bytes, quantity=5) ->defaultdict:
-    movies = parse_afisha(raw_movies_page, quantity)
-    sorted_by_cinemas = sort_cinemas(movies)
-    return sorted_by_cinemas
+def sort_by_cinemas(movies: list) -> list:
+    return sorted(movies, key=lambda v: v[1], reverse=True)
 
 
-def sort_cinemas(movies, afisha=True):
-    sorted_movies = defaultdict(list)
-    sorted_list = sorted(movies.items(), key=lambda v: v[1], reverse=True)
-    for movie in sorted_list:
-        title = movie[0]
-        cinemas = int(movie[1][0])
-        sorted_movies[title].append(cinemas)
-    return sorted_movies
+def sort_by_rating(movies: list) -> list:
+    return sorted(movies, key=lambda v: v[2], reverse=True)
 
 
-def sort_movies(movies: defaultdict,
-                rating=False,
-                afisha=False
-                ) -> defaultdict:
-
-    sorted_movies = defaultdict(list)
-    if rating:
-        movies_without_none = replace_none(movies)
-        sorted_list = sorted(movies_without_none.items(), key=lambda v: v[1][1], reverse=True)
-    else:
-        sorted_list = sorted(movies.items(), key=lambda v: v[1], reverse=True)
-    for movie in sorted_list:
-        title = movie[0]
-        cinemas, rating, votes = movie[1]
-        sorted_movies[title].append(cinemas)
-        sorted_movies[title].append(rating)
-        sorted_movies[title].append(votes)
-    return sorted_movies
-
-
-def replace_none(movies):
-    for title, data in movies.items():
+def replace_none(movies: list) -> list:
+    for data in movies:
         for i in range(len(data)):
             if data[i] is None:
-                movies[title][i] = 0
+                data[i] = 0
     return movies
 
 
-def output_movies(movies: defaultdict, sorting_by_rating: bool) -> None:
-    if sorting_by_rating:
-        sorted_by_rating = sort_movies(movies, sorting_by_rating)
-        pretty_console_print(sorted_by_rating)
-    else:
-        pretty_console_print(movies)
-
-
-def pretty_console_print(movies: defaultdict) -> None:
-    for movie_title, movie_data in movies.items():
-        print("Название фильма: {}".format(movie_title))
-        print("Идет в кинотеатрах (количество): {}".format(movie_data[0]))
-        print("Рейтинг (кинопоиск): {}".format(movie_data[1]))
-        print("Количество оценок (кинопоиск): {}".format(movie_data[2]))
+def pretty_console_print(movies: list) -> None:
+    for movie in movies:
+        print("Название фильма: {}".format(movie[0]))
+        print("Идет в кинотеатрах (количество): {}".format(movie[1]))
+        print("Рейтинг (кинопоиск): {}".format(movie[2]))
+        print("Количество оценок (кинопоиск): {}".format(movie[3]))
         print('==========================================================')
+
+
+def load_cookies(json_data: json) -> dict:
+    try:
+        cookies = json.load(json_data)
+        return cookies
+    except AttributeError:
+        return None
+
+
+def load_data(external_data: bytes) -> list:
+    try:
+        user_data = []
+        for item in external_data:
+            user_data.append(item.strip())
+        return user_data
+    except TypeError:
+        return None
+
+
+def get_raw_page(url: str, session=None, **kwargs) -> requests.models.Response:
+    if session:
+        return session.get(url, **kwargs).content
+    return requests.get(url, **kwargs).content
+
+
+def fetch_user_cookies(url: str) -> dict:
+    with requests.Session() as cookies_request:
+        response = cookies_request.get(url)
+        user_cookies = response.cookies.get_dict()
+        return user_cookies
+
+
+def fetch_working_proxy(proxy_list: list) -> dict:
+    url = "http://google.com"
+    if proxy_list is None:
+        return None
+    while True:
+        proxy = {"http": '{}'.format(random.choice(proxy_list))}
+        try:
+            response = requests.get(url, proxies=proxy, timeout=10)
+            if response:
+                break
+        except (IOError, ConnectionResetError):
+            pass
+    return proxy
 
 
 def parse_args() -> argparse:
@@ -133,23 +143,24 @@ def parse_args() -> argparse:
 def main():
 
     options = parse_args()
-    user_agents = utils.load_user_data(options.u_agent, user_agent=True)
-    proxies = utils.load_user_data(options.proxies, proxy=True)
-    usr_cookies = utils.load_user_data(options.cookies, cookies=True)
+    user_agents = load_data(options.u_agent)
+    proxies = load_data(options.proxies)
+    usr_cookies = load_cookies(options.cookies)
     quantity = options.quantity
     sorting_by_rating = options.rating
 
-    afisha_raw_page = utils.get_raw_page(AFISHA_URL)
-    afisha_movies_data = fetch_afisha_movies(afisha_raw_page,
-                                             quantity=quantity
-                                             )
+    afisha_raw_page = get_raw_page(AFISHA_URL)
+    afisha_movies_data = parse_afisha(afisha_raw_page)
+    afisha_sort_by_cinemas = sort_by_cinemas(afisha_movies_data)[:quantity]
+
     print('Loading data from kinopoisk.ru it may take up a few minutes...')
 
     with requests.Session() as kp_session:
         request_timeout = 10
-        for title in afisha_movies_data.keys():
+        for movie in afisha_sort_by_cinemas:
+            title = movie[0]
             if proxies:
-                proxy = utils.fetch_working_proxy(proxies)
+                proxy = fetch_working_proxy(proxies)
             else:
                 proxy = None
             if user_agents:
@@ -171,11 +182,14 @@ def main():
                                         ).content
             rating, votes = parse_kinopoisk(movie_raw_page)
             if len(movie_raw_page) < CAPTCHA_PAGE_LENGTH:
-                print("{} - can't fetch information, kinopoisk return captcha page".format(title))
-                rating, votes = 0, 0
-            afisha_movies_data[title].append(rating)
-            afisha_movies_data[title].append(votes)
-    output_movies(afisha_movies_data, sorting_by_rating)
+                rating, votes = None, None
+            movie.append(rating)
+            movie.append(votes)
+    movies_without_none = replace_none(afisha_sort_by_cinemas)
+    if sorting_by_rating:
+        pretty_console_print(sort_by_rating(movies_without_none))
+    else:
+        pretty_console_print(movies_without_none)
 
 if __name__ == '__main__':
 
