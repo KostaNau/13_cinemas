@@ -140,7 +140,7 @@ def parse_args() -> argparse:
     return args
 
 
-def main():
+if __name__ == '__main__':
 
     options = parse_args()
     user_agents = load_data(options.u_agent)
@@ -190,7 +190,3 @@ def main():
         pretty_console_print(sort_by_rating(movies_without_none))
     else:
         pretty_console_print(movies_without_none)
-
-if __name__ == '__main__':
-
-    main()
