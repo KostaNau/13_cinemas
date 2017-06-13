@@ -34,11 +34,13 @@ def parse_kinopoisk(raw_page: bytes) -> tuple:
         movie_rating = None
 
     if soup.find("span", {"class": "ratingCount"}):
-        votes_score = soup.find("span", {"class": "ratingCount"}).text.split()
-        if len(votes_score) == 2:
-            votes_score = int(votes_score[0] + votes_score[1])
-        elif len(votes_score) == 1:
-            votes_score = int(votes_score[0])
+        votes = soup.find("span", {"class": "ratingCount"}).text.split()
+        votes_score = int("".jont(votes))
+        print("DEBUG: ", votes_score)
+        # if len(votes_score) >= 2:
+        #     votes_score = int(votes_score[0] + votes_score[:1])
+        # elif len(votes_score) == 1:
+        #     votes_score = int(votes_score[0])
     else:
         votes_score = None
     return movie_rating, votes_score
@@ -84,7 +86,7 @@ def sort_by_rating(movies: list) -> list:
 
 def replace_none(movies: list) -> list:
     for data in movies:
-        for i in range(len(data)):
+        for i, _ in enumerate(data):
             if data[i] is None:
                 data[i] = 0
     return movies
@@ -185,7 +187,7 @@ def main():
 
     print('Loading data from kinopoisk.ru it may take up a few minutes...')
     kp_movies_data = fetch_movies_data(movies_sorted_by_cinemas,
-                                       user_agents=user_agents,
+                                       u_agents=user_agents,
                                        proxies=proxies,
                                        usr_cookies=usr_cookies)
 
