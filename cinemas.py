@@ -44,6 +44,36 @@ def parse_kinopoisk(raw_page: bytes) -> tuple:
     return movie_rating, votes_score
 
 
+def fetch_movies_data(movies,
+                      u_agents=None,
+                      proxies=None,
+                      usr_cookies=None):
+
+    with requests.Session() as kp_session:
+        request_timeout = 10
+        for movie in movies:
+            title = movie[0]
+            proxy = fetch_working_proxy(proxies) if proxies else None
+            header = {"User-Agent": random.choice(u_agents)} if u_agents else None
+            cookie = random.choice(usr_cookies) if usr_cookies else None
+            movie_querry = {"kp_query": title, "first":  "yes"}
+            movie_raw_page = kp_session.get(
+                                        KP_SEARCH_URL,
+                                        headers=header,
+                                        params=movie_querry,
+                                        cookies=cookie,
+                                        proxies=proxy,
+                                        timeout=request_timeout
+                                        ).content
+            rating, votes = parse_kinopoisk(movie_raw_page)
+            if len(movie_raw_page) < CAPTCHA_PAGE_LENGTH:
+                rating, votes = None, None
+            movie.append(rating)
+            movie.append(votes)
+
+    return movies
+
+
 def sort_by_cinemas(movies: list) -> list:
     return sorted(movies, key=lambda v: v[1], reverse=True)
 
@@ -140,9 +170,9 @@ def parse_args() -> argparse:
     return args
 
 
-if __name__ == '__main__':
-
+def main():
     options = parse_args()
+
     user_agents = load_data(options.u_agent)
     proxies = load_data(options.proxies)
     usr_cookies = load_cookies(options.cookies)
@@ -151,42 +181,21 @@ if __name__ == '__main__':
 
     afisha_raw_page = get_raw_page(AFISHA_URL)
     afisha_movies_data = parse_afisha(afisha_raw_page)
-    afisha_sort_by_cinemas = sort_by_cinemas(afisha_movies_data)[:quantity]
+    movies_sorted_by_cinemas = sort_by_cinemas(afisha_movies_data)[:quantity]
 
     print('Loading data from kinopoisk.ru it may take up a few minutes...')
+    kp_movies_data = fetch_movies_data(movies_sorted_by_cinemas,
+                                       user_agents=user_agents,
+                                       proxies=proxies,
+                                       usr_cookies=usr_cookies)
 
-    with requests.Session() as kp_session:
-        request_timeout = 10
-        for movie in afisha_sort_by_cinemas:
-            title = movie[0]
-            if proxies:
-                proxy = fetch_working_proxy(proxies)
-            else:
-                proxy = None
-            if user_agents:
-                headers = {"User-Agent": random.choice(user_agents)}
-            else:
-                headers = None
-            if usr_cookies:
-                cookie = random.choice(usr_cookies)
-            else:
-                cookie = None
-            movie_querry = {"kp_query": title, "first":  "yes"}
-            movie_raw_page = kp_session.get(
-                                        KP_SEARCH_URL,
-                                        headers=headers,
-                                        params=movie_querry,
-                                        cookies=cookie,
-                                        proxies=proxy,
-                                        timeout=request_timeout
-                                        ).content
-            rating, votes = parse_kinopoisk(movie_raw_page)
-            if len(movie_raw_page) < CAPTCHA_PAGE_LENGTH:
-                rating, votes = None, None
-            movie.append(rating)
-            movie.append(votes)
-    movies_without_none = replace_none(afisha_sort_by_cinemas)
+    movies_without_none = replace_none(kp_movies_data)
     if sorting_by_rating:
         pretty_console_print(sort_by_rating(movies_without_none))
     else:
         pretty_console_print(movies_without_none)
+
+
+if __name__ == '__main__':
+
+    main()
