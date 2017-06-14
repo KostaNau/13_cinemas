@@ -35,12 +35,7 @@ def parse_kinopoisk(raw_page: bytes) -> tuple:
 
     if soup.find("span", {"class": "ratingCount"}):
         votes = soup.find("span", {"class": "ratingCount"}).text.split()
-        votes_score = int("".jont(votes))
-        print("DEBUG: ", votes_score)
-        # if len(votes_score) >= 2:
-        #     votes_score = int(votes_score[0] + votes_score[:1])
-        # elif len(votes_score) == 1:
-        #     votes_score = int(votes_score[0])
+        votes_score = int("".join(votes))
     else:
         votes_score = None
     return movie_rating, votes_score
@@ -72,7 +67,6 @@ def fetch_movies_data(movies,
                 rating, votes = None, None
             movie.append(rating)
             movie.append(votes)
-
     return movies
 
 
@@ -109,12 +103,10 @@ def load_cookies(json_data: json) -> dict:
         return None
 
 
-def load_data(external_data: bytes) -> list:
+def load_data(external_path: str) -> list:
     try:
-        user_data = []
-        for item in external_data:
-            user_data.append(item.strip())
-        return user_data
+        with open(external_path, "r") as opened_file:
+            return [item.strip() for item in opened_file]
     except TypeError:
         return None
 
